@@ -47,11 +47,7 @@ CREATE TABLE users (
         REFERENCES customers(customer_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
-    CONSTRAINT chk_users_failed_login_count CHECK (failed_login_count >= 0),
-    CONSTRAINT chk_users_customer_role CHECK (
-        (role = 'CUSTOMER' AND customer_id IS NOT NULL)
-        OR (role = 'ADMIN' AND customer_id IS NULL)
-    )
+    CONSTRAINT chk_users_failed_login_count CHECK (failed_login_count >= 0)
 ) ENGINE=InnoDB;
 
 CREATE TABLE accounts (
@@ -92,12 +88,7 @@ CREATE TABLE transactions (
         REFERENCES accounts(account_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
-    CONSTRAINT chk_transactions_amount CHECK (amount > 0),
-    CONSTRAINT chk_transactions_account_direction CHECK (
-        (transaction_type = 'DEPOSIT' AND source_account_id IS NULL AND destination_account_id IS NOT NULL)
-        OR (transaction_type IN ('WITHDRAWAL', 'FEE') AND source_account_id IS NOT NULL AND destination_account_id IS NULL)
-        OR (transaction_type IN ('TRANSFER', 'LOAN_PAYMENT') AND source_account_id IS NOT NULL)
-    )
+    CONSTRAINT chk_transactions_amount CHECK (amount > 0)
 ) ENGINE=InnoDB;
 
 CREATE TABLE loans (

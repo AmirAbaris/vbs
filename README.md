@@ -14,6 +14,7 @@ The project includes conceptual and logical design, normalization to Third Norma
 | 3NF normalization explanation | `docs/design.md` |
 | Primary keys and foreign keys | `sql/01_schema.sql` |
 | Check constraints | `sql/01_schema.sql` |
+| FK-column business rules for MySQL 9.6 | `sql/03_triggers.sql` |
 | Stored procedures | `sql/04_procedures.sql` |
 | Transaction management | `sql/04_procedures.sql` |
 | Triggers | `sql/03_triggers.sql` |
@@ -63,4 +64,3 @@ The stored procedures support:
 - Account status checking
 
 All financial procedures use transactions and rollback on errors.
-
