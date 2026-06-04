@@ -2,7 +2,6 @@ USE vbs_bank;
 
 DELIMITER $$
 
-DROP TRIGGER IF EXISTS trg_accounts_before_update_balance$$
 DROP TRIGGER IF EXISTS trg_accounts_after_status_update$$
 DROP TRIGGER IF EXISTS trg_customers_after_status_update$$
 DROP TRIGGER IF EXISTS trg_transactions_before_insert_validate$$
@@ -37,16 +36,6 @@ BEGIN
     IF NEW.role = 'ADMIN' AND NEW.customer_id IS NOT NULL THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Admin users cannot reference a customer';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_accounts_before_update_balance
-BEFORE UPDATE ON accounts
-FOR EACH ROW
-BEGIN
-    IF NEW.balance < 0 THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Account balance cannot be negative';
     END IF;
 END$$
 

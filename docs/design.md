@@ -65,7 +65,7 @@ Important examples:
 - National code, mobile, email, username, and account number are unique.
 - Foreign keys connect customers, accounts, branches, users, loans, payments, transactions, and audit logs.
 
-MySQL 9.6 does not allow `CHECK` constraints on columns that are also used in foreign key referential actions. Because of that, these rules are enforced by triggers:
+MySQL `CHECK` constraints cannot express cross-column validation. Because of that, these rules are enforced by triggers:
 
 - Customer users must reference a customer, while admin users must not.
 - Transaction account direction must match the transaction type.

@@ -112,7 +112,7 @@ CREATE TABLE loans (
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
     CONSTRAINT chk_loans_principal CHECK (principal_amount > 0),
-    CONSTRAINT chk_loans_interest CHECK (annual_interest_rate >= 0),
+    CONSTRAINT chk_loans_interest CHECK (annual_interest_rate BETWEEN 0 AND 100),
     CONSTRAINT chk_loans_term CHECK (term_months > 0),
     CONSTRAINT chk_loans_remaining CHECK (remaining_balance >= 0),
     CONSTRAINT chk_loans_remaining_max CHECK (remaining_balance <= principal_amount),

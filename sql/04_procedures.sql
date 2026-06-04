@@ -147,17 +147,31 @@ BEGIN
 
     START TRANSACTION;
 
-    SELECT status, balance
-    INTO v_source_status, v_source_balance
-    FROM accounts
-    WHERE account_id = p_source_account_id
-    FOR UPDATE;
+    IF p_source_account_id < p_destination_account_id THEN
+        SELECT status, balance
+        INTO v_source_status, v_source_balance
+        FROM accounts
+        WHERE account_id = p_source_account_id
+        FOR UPDATE;
 
-    SELECT status
-    INTO v_destination_status
-    FROM accounts
-    WHERE account_id = p_destination_account_id
-    FOR UPDATE;
+        SELECT status
+        INTO v_destination_status
+        FROM accounts
+        WHERE account_id = p_destination_account_id
+        FOR UPDATE;
+    ELSE
+        SELECT status
+        INTO v_destination_status
+        FROM accounts
+        WHERE account_id = p_destination_account_id
+        FOR UPDATE;
+
+        SELECT status, balance
+        INTO v_source_status, v_source_balance
+        FROM accounts
+        WHERE account_id = p_source_account_id
+        FOR UPDATE;
+    END IF;
 
     IF v_source_status IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Source account not found';
@@ -196,8 +210,8 @@ BEGIN
         'TRANSFER', 'SUCCESS', p_description
     );
 
-    INSERT INTO audit_logs (event_type, entity_name, entity_id, old_value, new_value, description)
-    VALUES ('TRANSFER_COMPLETED', 'transactions', LAST_INSERT_ID(), p_source_account_id, p_destination_account_id, p_description);
+    INSERT INTO audit_logs (event_type, entity_name, entity_id, description)
+    VALUES ('TRANSFER_COMPLETED', 'transactions', LAST_INSERT_ID(), CONCAT('Transfer from account ', p_source_account_id, ' to account ', p_destination_account_id, ': ', p_description));
 
     COMMIT;
 END$$
@@ -295,10 +309,19 @@ BEGIN
     DECLARE v_user_id INT;
     DECLARE v_failed_login_count INT;
 
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
     SELECT user_id, failed_login_count
     INTO v_user_id, v_failed_login_count
     FROM users
-    WHERE username = p_username;
+    WHERE username = p_username
+    FOR UPDATE;
 
     IF v_user_id IS NULL THEN
         INSERT INTO audit_logs (event_type, entity_name, description)
@@ -324,6 +347,8 @@ BEGIN
             CONCAT('Failed login for ', p_username)
         );
     END IF;
+
+    COMMIT;
 END$$
 
 CREATE PROCEDURE sp_check_account_status(
