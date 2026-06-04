@@ -1,0 +1,85 @@
+USE vbs_bank;
+
+DELIMITER $$
+
+DROP TRIGGER IF EXISTS trg_accounts_before_update_balance$$
+DROP TRIGGER IF EXISTS trg_accounts_after_status_update$$
+DROP TRIGGER IF EXISTS trg_customers_after_status_update$$
+DROP TRIGGER IF EXISTS trg_transactions_before_insert_validate$$
+DROP TRIGGER IF EXISTS trg_loans_before_update_remaining$$
+
+CREATE TRIGGER trg_accounts_before_update_balance
+BEFORE UPDATE ON accounts
+FOR EACH ROW
+BEGIN
+    IF NEW.balance < 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Account balance cannot be negative';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_accounts_after_status_update
+AFTER UPDATE ON accounts
+FOR EACH ROW
+BEGIN
+    IF OLD.status <> NEW.status THEN
+        INSERT INTO audit_logs (
+            user_id, event_type, entity_name, entity_id,
+            old_value, new_value, description
+        )
+        VALUES (
+            NULL, 'ACCOUNT_STATUS_CHANGED', 'accounts', NEW.account_id,
+            OLD.status, NEW.status,
+            CONCAT('Account ', NEW.account_number, ' status changed')
+        );
+    END IF;
+END$$
+
+CREATE TRIGGER trg_customers_after_status_update
+AFTER UPDATE ON customers
+FOR EACH ROW
+BEGIN
+    IF OLD.status <> NEW.status THEN
+        INSERT INTO audit_logs (
+            user_id, event_type, entity_name, entity_id,
+            old_value, new_value, description
+        )
+        VALUES (
+            NULL, 'CUSTOMER_STATUS_CHANGED', 'customers', NEW.customer_id,
+            OLD.status, NEW.status,
+            CONCAT('Customer ', NEW.national_code, ' status changed')
+        );
+    END IF;
+END$$
+
+CREATE TRIGGER trg_transactions_before_insert_validate
+BEFORE INSERT ON transactions
+FOR EACH ROW
+BEGIN
+    IF NEW.amount <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Transaction amount must be positive';
+    END IF;
+
+    IF NEW.transaction_type = 'TRANSFER'
+       AND NEW.source_account_id = NEW.destination_account_id THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Transfer source and destination accounts must be different';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_loans_before_update_remaining
+BEFORE UPDATE ON loans
+FOR EACH ROW
+BEGIN
+    IF NEW.remaining_balance < 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan remaining balance cannot be negative';
+    END IF;
+
+    IF NEW.remaining_balance = 0 THEN
+        SET NEW.status = 'PAID_OFF';
+    END IF;
+END$$
+
+DELIMITER ;
