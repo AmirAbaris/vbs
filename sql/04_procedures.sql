@@ -23,7 +23,7 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_amount <= 0 THEN
+    IF p_amount IS NULL OR p_amount <= 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Deposit amount must be positive';
     END IF;
 
@@ -77,7 +77,7 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_amount <= 0 THEN
+    IF p_amount IS NULL OR p_amount <= 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Withdrawal amount must be positive';
     END IF;
 
@@ -137,7 +137,7 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_amount <= 0 THEN
+    IF p_amount IS NULL OR p_amount <= 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Transfer amount must be positive';
     END IF;
 
@@ -227,6 +227,7 @@ BEGIN
     DECLARE v_account_balance DECIMAL(18,2);
     DECLARE v_loan_status VARCHAR(20);
     DECLARE v_remaining_balance DECIMAL(18,2);
+    DECLARE v_repayment_account_id INT;
     DECLARE v_payment_amount DECIMAL(18,2);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -235,7 +236,7 @@ BEGIN
         RESIGNAL;
     END;
 
-    IF p_amount <= 0 THEN
+    IF p_amount IS NULL OR p_amount <= 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan payment amount must be positive';
     END IF;
 
@@ -247,8 +248,8 @@ BEGIN
     WHERE account_id = p_account_id
     FOR UPDATE;
 
-    SELECT status, remaining_balance
-    INTO v_loan_status, v_remaining_balance
+    SELECT status, remaining_balance, repayment_account_id
+    INTO v_loan_status, v_remaining_balance, v_repayment_account_id
     FROM loans
     WHERE loan_id = p_loan_id
     FOR UPDATE;
@@ -259,6 +260,10 @@ BEGIN
 
     IF v_loan_status IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan not found';
+    END IF;
+
+    IF p_account_id <> v_repayment_account_id THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan payment account must match the loan repayment account';
     END IF;
 
     IF v_account_status <> 'ACTIVE' THEN
@@ -308,6 +313,7 @@ CREATE PROCEDURE sp_record_login_attempt(
 BEGIN
     DECLARE v_user_id INT;
     DECLARE v_failed_login_count INT;
+    DECLARE v_user_status VARCHAR(20);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -315,10 +321,18 @@ BEGIN
         RESIGNAL;
     END;
 
+    IF p_username IS NULL OR TRIM(p_username) = '' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Username is required';
+    END IF;
+
+    IF p_success IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Login success flag is required';
+    END IF;
+
     START TRANSACTION;
 
-    SELECT user_id, failed_login_count
-    INTO v_user_id, v_failed_login_count
+    SELECT user_id, failed_login_count, status
+    INTO v_user_id, v_failed_login_count, v_user_status
     FROM users
     WHERE username = p_username
     FOR UPDATE;
@@ -326,6 +340,13 @@ BEGIN
     IF v_user_id IS NULL THEN
         INSERT INTO audit_logs (event_type, entity_name, description)
         VALUES ('LOGIN_FAILED', 'users', CONCAT('Unknown username: ', p_username));
+    ELSEIF p_success AND v_user_status <> 'ACTIVE' THEN
+        INSERT INTO audit_logs (user_id, event_type, entity_name, entity_id, old_value, description)
+        VALUES (
+            v_user_id, 'LOGIN_BLOCKED', 'users', v_user_id,
+            v_user_status,
+            CONCAT('Blocked login for ', p_username)
+        );
     ELSEIF p_success THEN
         UPDATE users
         SET failed_login_count = 0,

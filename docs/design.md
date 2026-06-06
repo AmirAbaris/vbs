@@ -69,6 +69,9 @@ MySQL `CHECK` constraints cannot express cross-column validation. Because of tha
 
 - Customer users must reference a customer, while admin users must not.
 - Transaction account direction must match the transaction type.
+- A loan repayment account must belong to the same customer as the loan.
+- Loan payments must use the loan's configured repayment account.
+- Paid-off loans must have no remaining balance.
 
 ## Stored Procedures And Transactions
 
@@ -88,4 +91,3 @@ Money-moving procedures use `START TRANSACTION`, `SELECT ... FOR UPDATE`, `COMMI
 In MySQL InnoDB, primary keys are clustered indexes. Extra indexes in `sql/02_indexes.sql` are secondary indexes, equivalent to non-clustered indexes in many database courses.
 
 Indexes support searches by customer identity, account number, account/customer, transaction date, loan status, branch city, and audit event.
-

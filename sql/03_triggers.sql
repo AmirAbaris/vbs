@@ -5,7 +5,9 @@ DELIMITER $$
 DROP TRIGGER IF EXISTS trg_accounts_after_status_update$$
 DROP TRIGGER IF EXISTS trg_customers_after_status_update$$
 DROP TRIGGER IF EXISTS trg_transactions_before_insert_validate$$
+DROP TRIGGER IF EXISTS trg_loans_before_insert_validate$$
 DROP TRIGGER IF EXISTS trg_loans_before_update_remaining$$
+DROP TRIGGER IF EXISTS trg_loan_payments_before_insert_validate$$
 DROP TRIGGER IF EXISTS trg_users_before_insert_role_customer$$
 DROP TRIGGER IF EXISTS trg_users_before_update_role_customer$$
 
@@ -77,7 +79,7 @@ CREATE TRIGGER trg_transactions_before_insert_validate
 BEFORE INSERT ON transactions
 FOR EACH ROW
 BEGIN
-    IF NEW.amount <= 0 THEN
+    IF NEW.amount IS NULL OR NEW.amount <= 0 THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Transaction amount must be positive';
     END IF;
@@ -113,10 +115,27 @@ BEGIN
     END IF;
 END$$
 
-CREATE TRIGGER trg_loans_before_update_remaining
-BEFORE UPDATE ON loans
+CREATE TRIGGER trg_loans_before_insert_validate
+BEFORE INSERT ON loans
 FOR EACH ROW
 BEGIN
+    DECLARE v_repayment_account_customer_id INT;
+
+    SELECT customer_id
+    INTO v_repayment_account_customer_id
+    FROM accounts
+    WHERE account_id = NEW.repayment_account_id;
+
+    IF v_repayment_account_customer_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan repayment account not found';
+    END IF;
+
+    IF v_repayment_account_customer_id <> NEW.customer_id THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan repayment account must belong to the loan customer';
+    END IF;
+
     IF NEW.remaining_balance < 0 THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Loan remaining balance cannot be negative';
@@ -124,6 +143,69 @@ BEGIN
 
     IF NEW.remaining_balance = 0 THEN
         SET NEW.status = 'PAID_OFF';
+    END IF;
+
+    IF NEW.status = 'PAID_OFF' AND NEW.remaining_balance > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Paid-off loans cannot have a remaining balance';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_loans_before_update_remaining
+BEFORE UPDATE ON loans
+FOR EACH ROW
+BEGIN
+    DECLARE v_repayment_account_customer_id INT;
+
+    SELECT customer_id
+    INTO v_repayment_account_customer_id
+    FROM accounts
+    WHERE account_id = NEW.repayment_account_id;
+
+    IF v_repayment_account_customer_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan repayment account not found';
+    END IF;
+
+    IF v_repayment_account_customer_id <> NEW.customer_id THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan repayment account must belong to the loan customer';
+    END IF;
+
+    IF NEW.remaining_balance < 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan remaining balance cannot be negative';
+    END IF;
+
+    IF NEW.remaining_balance = 0 THEN
+        SET NEW.status = 'PAID_OFF';
+    END IF;
+
+    IF NEW.status = 'PAID_OFF' AND NEW.remaining_balance > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Paid-off loans cannot have a remaining balance';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_loan_payments_before_insert_validate
+BEFORE INSERT ON loan_payments
+FOR EACH ROW
+BEGIN
+    DECLARE v_repayment_account_id INT;
+
+    SELECT repayment_account_id
+    INTO v_repayment_account_id
+    FROM loans
+    WHERE loan_id = NEW.loan_id;
+
+    IF v_repayment_account_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan not found';
+    END IF;
+
+    IF NEW.account_id <> v_repayment_account_id THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Loan payment must use the loan repayment account';
     END IF;
 END$$
 
