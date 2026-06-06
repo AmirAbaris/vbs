@@ -2,7 +2,7 @@
 
 This project is a MySQL 8.0 database design for a Virtual Banking System (VBS). It manages customers, bank accounts, transactions, loans, authentication users, branches, and audit logs for both end users and administrators.
 
-The project includes conceptual and logical design, normalization to Third Normal Form (3NF), constraints, stored procedures, transaction management, triggers, indexes, fake seed data, and test scenarios.
+The project includes conceptual and logical design, normalization to Third Normal Form (3NF), constraints, stored procedures, transaction management, triggers, indexes, and fake seed data.
 
 ## Requirements Coverage
 
@@ -20,7 +20,6 @@ The project includes conceptual and logical design, normalization to Third Norma
 | Triggers | `sql/03_triggers.sql` |
 | Clustered/non-clustered indexing discussion | `docs/design.md`, `sql/02_indexes.sql` |
 | Fake sample dataset | `sql/05_seed_data.sql` |
-| Runnable tests and reports | `sql/06_tests.sql` |
 
 ## MySQL Version
 
@@ -38,7 +37,6 @@ SOURCE sql/02_indexes.sql;
 SOURCE sql/03_triggers.sql;
 SOURCE sql/04_procedures.sql;
 SOURCE sql/05_seed_data.sql;
-SOURCE sql/06_tests.sql;
 ```
 
 Or from a terminal:
@@ -49,7 +47,6 @@ mysql -u root -p vbs_bank < sql/02_indexes.sql
 mysql -u root -p vbs_bank < sql/03_triggers.sql
 mysql -u root -p vbs_bank < sql/04_procedures.sql
 mysql -u root -p vbs_bank < sql/05_seed_data.sql
-mysql -u root -p vbs_bank < sql/06_tests.sql
 ```
 
 ## Main Banking Operations
