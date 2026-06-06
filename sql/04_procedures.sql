@@ -313,7 +313,6 @@ CREATE PROCEDURE sp_record_login_attempt(
 BEGIN
     DECLARE v_user_id INT;
     DECLARE v_failed_login_count INT;
-    DECLARE v_user_status VARCHAR(20);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -331,8 +330,8 @@ BEGIN
 
     START TRANSACTION;
 
-    SELECT user_id, failed_login_count, status
-    INTO v_user_id, v_failed_login_count, v_user_status
+    SELECT user_id, failed_login_count
+    INTO v_user_id, v_failed_login_count
     FROM users
     WHERE username = p_username
     FOR UPDATE;
@@ -340,13 +339,6 @@ BEGIN
     IF v_user_id IS NULL THEN
         INSERT INTO audit_logs (event_type, entity_name, description)
         VALUES ('LOGIN_FAILED', 'users', CONCAT('Unknown username: ', p_username));
-    ELSEIF p_success AND v_user_status <> 'ACTIVE' THEN
-        INSERT INTO audit_logs (user_id, event_type, entity_name, entity_id, old_value, description)
-        VALUES (
-            v_user_id, 'LOGIN_BLOCKED', 'users', v_user_id,
-            v_user_status,
-            CONCAT('Blocked login for ', p_username)
-        );
     ELSEIF p_success THEN
         UPDATE users
         SET failed_login_count = 0,

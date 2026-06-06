@@ -69,9 +69,7 @@ MySQL `CHECK` constraints cannot express cross-column validation. Because of tha
 
 - Customer users must reference a customer, while admin users must not.
 - Transaction account direction must match the transaction type.
-- A loan repayment account must belong to the same customer as the loan.
-- Loan payments must use the loan's configured repayment account.
-- Paid-off loans must have no remaining balance.
+- A loan is automatically marked as paid off when its remaining balance reaches zero.
 
 ## Stored Procedures And Transactions
 
