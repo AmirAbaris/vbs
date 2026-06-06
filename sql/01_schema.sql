@@ -1,7 +1,13 @@
+-- Recreates the whole demo database from zero.
 DROP DATABASE IF EXISTS vbs_bank;
+
+-- utf8mb4 supports normal text plus emojis/special characters.
 CREATE DATABASE vbs_bank CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- All commands after this run inside the vbs_bank database.
 USE vbs_bank;
 
+-- Branches are bank office locations.
 CREATE TABLE branches (
     branch_id INT AUTO_INCREMENT PRIMARY KEY,
     branch_name VARCHAR(100) NOT NULL,
@@ -11,8 +17,10 @@ CREATE TABLE branches (
     status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_branches_phone UNIQUE (phone)
+-- InnoDB supports transactions, foreign keys, and row locking in MySQL.
 ) ENGINE=InnoDB;
 
+-- Customers are the people who own accounts and loans.
 CREATE TABLE customers (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
     national_code VARCHAR(10) NOT NULL,
@@ -24,6 +32,7 @@ CREATE TABLE customers (
     address VARCHAR(255) NOT NULL,
     status ENUM('ACTIVE', 'SUSPENDED', 'CLOSED') NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- constraints are used to enforce the rules on the data
     CONSTRAINT uq_customers_national_code UNIQUE (national_code),
     CONSTRAINT uq_customers_mobile UNIQUE (mobile),
     CONSTRAINT uq_customers_email UNIQUE (email),
@@ -32,8 +41,10 @@ CREATE TABLE customers (
     CONSTRAINT chk_customers_birth_date CHECK (birth_date BETWEEN '1900-01-01' AND '2010-12-31')
 ) ENGINE=InnoDB;
 
+-- Users are login accounts. A user can be a customer or an admin.
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
+    -- NULL is allowed because admins are not linked to a customer.
     customer_id INT NULL,
     username VARCHAR(60) NOT NULL,
     password_hash CHAR(64) NOT NULL,
@@ -43,13 +54,17 @@ CREATE TABLE users (
     last_login_at DATETIME NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_users_username UNIQUE (username),
+    -- FOREIGN KEY connects this table to customers.
     CONSTRAINT fk_users_customer FOREIGN KEY (customer_id)
         REFERENCES customers(customer_id)
+        -- If a customer id changes, update it here too.
         ON UPDATE CASCADE
+        -- Do not delete a customer if a user still points to it.
         ON DELETE RESTRICT,
     CONSTRAINT chk_users_failed_login_count CHECK (failed_login_count >= 0)
 ) ENGINE=InnoDB;
 
+-- Accounts store the customer's money balance.
 CREATE TABLE accounts (
     account_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
@@ -60,10 +75,12 @@ CREATE TABLE accounts (
     status ENUM('ACTIVE', 'FROZEN', 'CLOSED') NOT NULL DEFAULT 'ACTIVE',
     opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uq_accounts_account_number UNIQUE (account_number),
+    -- Each account belongs to one customer.
     CONSTRAINT fk_accounts_customer FOREIGN KEY (customer_id)
         REFERENCES customers(customer_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
+    -- Each account is opened at one branch.
     CONSTRAINT fk_accounts_branch FOREIGN KEY (branch_id)
         REFERENCES branches(branch_id)
         ON UPDATE CASCADE
@@ -71,7 +88,9 @@ CREATE TABLE accounts (
     CONSTRAINT chk_accounts_balance CHECK (balance >= 0)
 ) ENGINE=InnoDB;
 
+-- Transactions are the history of deposits, withdrawals, transfers, and loan payments.
 CREATE TABLE transactions (
+    -- BIGINT is a large integer type that can store very large numbers.
     transaction_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     source_account_id INT NULL,
     destination_account_id INT NULL,
@@ -80,10 +99,12 @@ CREATE TABLE transactions (
     status ENUM('PENDING', 'SUCCESS', 'FAILED') NOT NULL DEFAULT 'PENDING',
     description VARCHAR(255) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Source account is used for money leaving an account.
     CONSTRAINT fk_transactions_source_account FOREIGN KEY (source_account_id)
         REFERENCES accounts(account_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT,
+    -- Destination account is used for money entering an account.
     CONSTRAINT fk_transactions_destination_account FOREIGN KEY (destination_account_id)
         REFERENCES accounts(account_id)
         ON UPDATE CASCADE
@@ -91,6 +112,7 @@ CREATE TABLE transactions (
     CONSTRAINT chk_transactions_amount CHECK (amount > 0)
 ) ENGINE=InnoDB;
 
+-- Loans store borrowed money and the remaining amount to repay.
 CREATE TABLE loans (
     loan_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
@@ -119,6 +141,7 @@ CREATE TABLE loans (
     CONSTRAINT chk_loans_dates CHECK (due_date > start_date)
 ) ENGINE=InnoDB;
 
+-- Loan payments store each payment made toward a loan.
 CREATE TABLE loan_payments (
     payment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     loan_id INT NOT NULL,
@@ -136,6 +159,7 @@ CREATE TABLE loan_payments (
     CONSTRAINT chk_loan_payments_amount CHECK (amount > 0)
 ) ENGINE=InnoDB;
 
+-- Audit logs store important events for reporting/security history.
 CREATE TABLE audit_logs (
     audit_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
@@ -149,5 +173,6 @@ CREATE TABLE audit_logs (
     CONSTRAINT fk_audit_logs_user FOREIGN KEY (user_id)
         REFERENCES users(user_id)
         ON UPDATE CASCADE
+        -- If a user is deleted, keep the log but clear user_id.
         ON DELETE SET NULL
 ) ENGINE=InnoDB;

@@ -1,7 +1,9 @@
 USE vbs_bank;
 
+-- Procedures also contain many ; lines, so use $$ as the ending marker.
 DELIMITER $$
 
+-- Drop old procedures first so the script can be run many times.
 DROP PROCEDURE IF EXISTS sp_deposit$$
 DROP PROCEDURE IF EXISTS sp_withdraw$$
 DROP PROCEDURE IF EXISTS sp_transfer$$
@@ -9,14 +11,18 @@ DROP PROCEDURE IF EXISTS sp_pay_loan$$
 DROP PROCEDURE IF EXISTS sp_record_login_attempt$$
 DROP PROCEDURE IF EXISTS sp_check_account_status$$
 
+-- Deposit money into one account.
 CREATE PROCEDURE sp_deposit(
+    -- IN means the caller sends this value into the procedure.
     IN p_destination_account_id INT,
     IN p_amount DECIMAL(18,2),
     IN p_description VARCHAR(255)
 )
 BEGIN
+    -- Local variable used to store the selected account status.
     DECLARE v_status VARCHAR(20);
 
+    -- If any SQL error happens, rollback and show the original error.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -27,12 +33,14 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Deposit amount must be positive';
     END IF;
 
+    -- Start a transaction so all changes succeed or all changes rollback.
     START TRANSACTION;
 
     SELECT status
     INTO v_status
     FROM accounts
     WHERE account_id = p_destination_account_id
+    -- FOR UPDATE locks this account row until COMMIT/ROLLBACK.
     FOR UPDATE;
 
     IF v_status IS NULL THEN
@@ -62,6 +70,7 @@ BEGIN
     COMMIT;
 END$$
 
+-- Withdraw money from one account.
 CREATE PROCEDURE sp_withdraw(
     IN p_source_account_id INT,
     IN p_amount DECIMAL(18,2),
@@ -71,6 +80,7 @@ BEGIN
     DECLARE v_status VARCHAR(20);
     DECLARE v_balance DECIMAL(18,2);
 
+    -- Rollback keeps the balance safe if an error happens halfway.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -83,6 +93,7 @@ BEGIN
 
     START TRANSACTION;
 
+    -- Read and lock the account before changing its balance.
     SELECT status, balance
     INTO v_status, v_balance
     FROM accounts
@@ -97,6 +108,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Source account is not active';
     END IF;
 
+    -- Prevent overdraft.
     IF v_balance < p_amount THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
     END IF;
@@ -120,6 +132,7 @@ BEGIN
     COMMIT;
 END$$
 
+-- Transfer money from one account to another.
 CREATE PROCEDURE sp_transfer(
     IN p_source_account_id INT,
     IN p_destination_account_id INT,
@@ -131,6 +144,7 @@ BEGIN
     DECLARE v_destination_status VARCHAR(20);
     DECLARE v_source_balance DECIMAL(18,2);
 
+    -- Any failure cancels both balance updates.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -147,6 +161,7 @@ BEGIN
 
     START TRANSACTION;
 
+    -- Lock accounts in id order to reduce deadlock risk.
     IF p_source_account_id < p_destination_account_id THEN
         SELECT status, balance
         INTO v_source_status, v_source_balance
@@ -173,6 +188,7 @@ BEGIN
         FOR UPDATE;
     END IF;
 
+    -- Check both accounts exist and are active before moving money.
     IF v_source_status IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Source account not found';
     END IF;
@@ -201,6 +217,7 @@ BEGIN
     SET balance = balance + p_amount
     WHERE account_id = p_destination_account_id;
 
+    -- Store the transfer in transaction history.
     INSERT INTO transactions (
         source_account_id, destination_account_id, amount,
         transaction_type, status, description
@@ -216,6 +233,7 @@ BEGIN
     COMMIT;
 END$$
 
+-- Pay part or all of a loan from its repayment account.
 CREATE PROCEDURE sp_pay_loan(
     IN p_loan_id INT,
     IN p_account_id INT,
@@ -230,6 +248,7 @@ BEGIN
     DECLARE v_repayment_account_id INT;
     DECLARE v_payment_amount DECIMAL(18,2);
 
+    -- If payment fails, undo balance and loan changes.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -254,6 +273,7 @@ BEGIN
     WHERE loan_id = p_loan_id
     FOR UPDATE;
 
+    -- Make sure the account and loan exist.
     IF v_account_status IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payment account not found';
     END IF;
@@ -262,6 +282,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan not found';
     END IF;
 
+    -- Demo rule: loan must be paid from its repayment account.
     IF p_account_id <> v_repayment_account_id THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan payment account must match the loan repayment account';
     END IF;
@@ -274,6 +295,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Loan is not active';
     END IF;
 
+    -- If user pays too much, only pay the remaining balance.
     SET v_payment_amount = LEAST(p_amount, v_remaining_balance);
 
     IF v_account_balance < v_payment_amount THEN
@@ -288,6 +310,7 @@ BEGIN
     SET remaining_balance = remaining_balance - v_payment_amount
     WHERE loan_id = p_loan_id;
 
+    -- Save payment details in both loan_payments and transactions.
     INSERT INTO loan_payments (loan_id, account_id, amount)
     VALUES (p_loan_id, p_account_id, v_payment_amount);
 
@@ -306,6 +329,7 @@ BEGIN
     COMMIT;
 END$$
 
+-- Record login success/failure and lock user after 3 failed tries.
 CREATE PROCEDURE sp_record_login_attempt(
     IN p_username VARCHAR(60),
     IN p_success BOOLEAN
@@ -314,6 +338,7 @@ BEGIN
     DECLARE v_user_id INT;
     DECLARE v_failed_login_count INT;
 
+    -- Rollback audit/user changes if something fails.
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -336,9 +361,11 @@ BEGIN
     WHERE username = p_username
     FOR UPDATE;
 
+    -- Unknown user: only add a failed login audit row.
     IF v_user_id IS NULL THEN
         INSERT INTO audit_logs (event_type, entity_name, description)
         VALUES ('LOGIN_FAILED', 'users', CONCAT('Unknown username: ', p_username));
+    -- Successful login: reset failed count and save login time.
     ELSEIF p_success THEN
         UPDATE users
         SET failed_login_count = 0,
@@ -347,6 +374,7 @@ BEGIN
 
         INSERT INTO audit_logs (user_id, event_type, entity_name, entity_id, description)
         VALUES (v_user_id, 'LOGIN_SUCCESS', 'users', v_user_id, CONCAT('Successful login for ', p_username));
+    -- Failed login: increase count and lock after 3 failures.
     ELSE
         UPDATE users
         SET failed_login_count = failed_login_count + 1,
@@ -364,10 +392,12 @@ BEGIN
     COMMIT;
 END$$
 
+-- Simple report procedure for one account.
 CREATE PROCEDURE sp_check_account_status(
     IN p_account_id INT
 )
 BEGIN
+    -- JOIN combines account, customer, and branch information in one result.
     SELECT
         a.account_id,
         a.account_number,
@@ -385,4 +415,5 @@ BEGIN
     WHERE a.account_id = p_account_id;
 END$$
 
+-- Return to normal ; delimiter.
 DELIMITER ;

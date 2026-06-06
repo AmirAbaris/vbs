@@ -1,5 +1,6 @@
 USE vbs_bank;
 
+-- Demo branches.
 INSERT INTO branches (branch_name, city, address, phone, status) VALUES
 ('VBS Central Tehran', 'Tehran', 'No. 10, Valiasr Street, Tehran', '02188000001', 'ACTIVE'),
 ('VBS Saadat Abad', 'Tehran', 'No. 22, Saadat Abad Boulevard, Tehran', '02188000002', 'ACTIVE'),
@@ -8,6 +9,7 @@ INSERT INTO branches (branch_name, city, address, phone, status) VALUES
 ('VBS Shiraz Zand', 'Shiraz', 'No. 31, Zand Boulevard, Shiraz', '07136000001', 'ACTIVE'),
 ('VBS Tabriz East', 'Tabriz', 'No. 18, Imam Street, Tabriz', '04133000001', 'INACTIVE');
 
+-- Demo customers. The names/data are fake.
 INSERT INTO customers (
     national_code, first_name, last_name, birth_date,
     mobile, email, address, status
@@ -28,6 +30,7 @@ INSERT INTO customers (
 ('0012345691', 'Tara', 'Ghasemi', '1994-12-19', '09120000014', 'tara.ghasemi@example.com', 'Tehran, Pasdaran, No. 29', 'ACTIVE'),
 ('0012345692', 'Mehrdad', 'Salehi', '1982-01-03', '09120000015', 'mehrdad.salehi@example.com', 'Isfahan, Kaveh, No. 40', 'CLOSED');
 
+-- Demo login users. NULL customer_id means admin user.
 INSERT INTO users (customer_id, username, password_hash, role, status) VALUES
 (NULL, 'admin.main', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'ADMIN', 'ACTIVE'),
 (NULL, 'admin.audit', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'ADMIN', 'ACTIVE'),
@@ -47,6 +50,7 @@ INSERT INTO users (customer_id, username, password_hash, role, status) VALUES
 (14, 'tara.ghasemi', '1212121212121212121212121212121212121212121212121212121212121212', 'CUSTOMER', 'ACTIVE'),
 (15, 'mehrdad.salehi', '3434343434343434343434343434343434343434343434343434343434343434', 'CUSTOMER', 'DISABLED');
 
+-- Demo bank accounts with starting balances.
 INSERT INTO accounts (
     customer_id, branch_id, account_number, account_type, balance, status
 ) VALUES
@@ -76,6 +80,7 @@ INSERT INTO accounts (
 (14, 2, '100100000000000024', 'SAVINGS', 30500000.00, 'ACTIVE'),
 (15, 4, '100100000000000025', 'CHECKING', 0.00, 'CLOSED');
 
+-- Demo loans. remaining_balance shows how much is still unpaid.
 INSERT INTO loans (
     customer_id, repayment_account_id, principal_amount,
     annual_interest_rate, term_months, remaining_balance,
@@ -88,6 +93,8 @@ INSERT INTO loans (
 (11, 19, 60000000.00, 17.50, 30, 56000000.00, 'ACTIVE', '2025-02-10', '2027-08-10'),
 (14, 23, 45000000.00, 19.00, 24, 41000000.00, 'ACTIVE', '2025-05-05', '2027-05-05');
 
+-- These CALL commands run the stored procedures to create demo activity.
+-- They also create transaction rows and audit log rows.
 CALL sp_deposit(1, 1500000.00, 'Salary deposit');
 CALL sp_deposit(2, 700000.00, 'Savings top-up');
 CALL sp_deposit(3, 900000.00, 'Cash deposit');
@@ -140,8 +147,8 @@ CALL sp_pay_loan(3, 9, 2500000.00, 'Business loan repayment');
 CALL sp_pay_loan(5, 19, 1000000.00, 'Loan repayment');
 CALL sp_pay_loan(6, 23, 1500000.00, 'Loan repayment');
 
+-- Demo login attempts: success, failures, and unknown username.
 CALL sp_record_login_attempt('arman.rahimi', TRUE);
 CALL sp_record_login_attempt('nika.ahmadi', FALSE);
 CALL sp_record_login_attempt('nika.ahmadi', FALSE);
 CALL sp_record_login_attempt('unknown.user', FALSE);
-
